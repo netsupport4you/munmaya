@@ -297,6 +297,7 @@ function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [time, setTime] = useState({ hours: 5, minutes: 42, seconds: 20 });
+  const auth = useAuthStore();
 
   useEffect(() => {
     fetchProducts();
@@ -408,19 +409,21 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Admin Link */}
-      <section className="container mx-auto flex justify-end px-4 py-3">
-        <Link to="/admin" className="group inline-flex h-14 w-[150px] items-center gap-2.5 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/5 via-card to-magenta/5 px-3 shadow-soft transition-all hover:-translate-y-0.5 hover:border-primary/50">
-          <span className="relative grid size-8 place-items-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
-            <Settings className="size-4" />
-          </span>
-          <span className="min-w-0 text-left leading-tight">
-            <span className="block truncate text-[11px] font-black">Admin Panel</span>
-            <span className="block text-[9px] font-semibold text-muted-foreground">পণ্য ম্যানেজ করুন</span>
-          </span>
-          <ArrowRight className="ml-auto size-3.5 text-primary transition-transform group-hover:translate-x-0.5" />
-        </Link>
-      </section>
+      {/* Admin Link - Only show for admins */}
+      {auth.isAdmin() && (
+        <section className="container mx-auto flex justify-end px-4 py-3">
+          <Link to="/admin" className="group inline-flex h-14 w-[150px] items-center gap-2.5 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/5 via-card to-magenta/5 px-3 shadow-soft transition-all hover:-translate-y-0.5 hover:border-primary/50">
+            <span className="relative grid size-8 place-items-center rounded-xl bg-gradient-to-br from-primary to-magenta text-white">
+              <Settings className="size-4" />
+            </span>
+            <span className="min-w-0 text-left leading-tight">
+              <span className="block truncate text-[11px] font-black">Admin Panel</span>
+              <span className="block text-[9px] font-semibold text-muted-foreground">পণ্য ম্যানেজ করুন</span>
+            </span>
+            <ArrowRight className="ml-auto size-3.5 text-primary transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        </section>
+      )}
 
       {/* Categories */}
       <section className="container mx-auto px-4 py-8 sm:py-12">

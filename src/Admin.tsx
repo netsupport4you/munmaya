@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Edit, Save, X, Package, Loader2, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit, Save, X, Package, Loader2, Image as ImageIcon, LogOut, Shield } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { useAuthStore } from './stores/authStore';
 
 interface Product {
   id: string;
@@ -14,6 +15,7 @@ interface Product {
 
 export default function Admin() {
   const navigate = useNavigate();
+  const { user, signOut, isAdmin } = useAuthStore();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -30,8 +32,13 @@ export default function Admin() {
   });
 
   useEffect(() => {
+    // Auth check - ProtectedRoute handles redirect, but this is a safety net
+    if (!user || !isAdmin()) {
+      navigate('/admin/login', { replace: true });
+      return;
+    }
     fetchProducts();
-  }, []);
+  }, [user, navigate, isAdmin]);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -157,6 +164,11 @@ export default function Admin() {
     return '৳' + price.toLocaleString('en-IN');
   };
 
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/admin/login', { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -176,18 +188,43 @@ export default function Admin() {
                 M
               </div>
               <span className="font-extrabold">MUNMAYA</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold flex items-center gap-1">
+                <Shield className="size-3" />
                 Admin
               </span>
             </div>
           </div>
-          <button
-            onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', description: '', price: '', image_url: '' }); }}
-            className="flex items-center gap-2 h-9 rounded-xl bg-gradient-to-r from-primary to-magenta px-4 text-xs font-semibold text-white hover:shadow-glow transition-all"
-          >
-            <Plus className="size-4" />
-            নতুন পণ্য
-          </button>
+          <div className="flex items-center gap-3">
+            {/* User info */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-magenta flex items-center justify-center text-white text-xs font-bold">
+                {user?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'A'}
+              </div>
+              <div className="text-xs">
+                <p className="font-medium truncate max-w-[120px]">{user?.full_name || user?.email}</p>
+                <p className="text-muted-foreground text-[10px]">অ্যাডমিন</p>
+              </div>
+            </div>
+
+            {/* Logout button */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-border text-xs font-medium text-muted-foreground hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-all"
+              title="লগআউট"
+            >
+              <LogOut className="size-4" />
+              <span className="hidden sm:inline">লগআউট</span>
+            </button>
+
+            {/* New Product button */}
+            <button
+              onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', description: '', price: '', image_url: '' }); }}
+              className="flex items-center gap-2 h-9 rounded-xl bg-gradient-to-r from-primary to-magenta px-4 text-xs font-semibold text-white hover:shadow-glow transition-all"
+            >
+              <Plus className="size-4" />
+              নতুন পণ্য
+            </button>
+          </div>
         </div>
       </header>
 

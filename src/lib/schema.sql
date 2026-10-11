@@ -1,12 +1,13 @@
 -- ============================================
--- MUNMAYA Simple Products Table
--- Run this in Supabase SQL Editor
+-- MUNMAYA Database Schema with Authentication
+-- Run this ENTIRE script in Supabase SQL Editor
 -- ============================================
 
--- Drop existing table if exists (for clean setup)
+-- ============================================
+-- 1. PRODUCTS TABLE
+-- ============================================
 DROP TABLE IF EXISTS products CASCADE;
 
--- Create products table
 CREATE TABLE products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
@@ -16,31 +17,113 @@ CREATE TABLE products (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable Row Level Security
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 
--- Policy: Anyone can read products
+-- Anyone can read products (storefront)
 CREATE POLICY "Products are viewable by everyone"
   ON products FOR SELECT
   USING (true);
 
--- Policy: Anyone can insert products (for admin panel demo)
-CREATE POLICY "Anyone can insert products"
+-- Only authenticated admins can insert
+CREATE POLICY "Only admins can insert products"
   ON products FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
 
--- Policy: Anyone can update products (for admin panel demo)
-CREATE POLICY "Anyone can update products"
+-- Only authenticated admins can update
+CREATE POLICY "Only admins can update products"
   ON products FOR UPDATE
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
 
--- Policy: Anyone can delete products (for admin panel demo)
-CREATE POLICY "Anyone can delete products"
+-- Only authenticated admins can delete
+CREATE POLICY "Only admins can delete products"
   ON products FOR DELETE
-  USING (true);
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
 
 -- ============================================
--- Insert 3 Dummy Products
+-- 2. PROFILES TABLE (extends auth.users)
+-- ============================================
+DROP TABLE IF EXISTS profiles CASCADE;
+
+CREATE TABLE profiles (
+  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  email TEXT NOT NULL,
+  full_name TEXT,
+  role TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('customer', 'admin')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own profile
+CREATE POLICY "Users can view own profile"
+  ON profiles FOR SELECT
+  USING (auth.uid() = id);
+
+-- Users can update their own profile
+CREATE POLICY "Users can update own profile"
+  ON profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+-- Admins can view all profiles
+CREATE POLICY "Admins can view all profiles"
+  ON profiles FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid()
+      AND p.role = 'admin'
+    )
+  );
+
+-- ============================================
+-- 3. AUTO-CREATE PROFILE ON SIGNUP
+-- ============================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    -- First user becomes admin, rest are customers
+    CASE
+      WHEN (SELECT COUNT(*) FROM public.profiles) = 0 THEN 'admin'
+      ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'customer')
+    END
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop existing trigger if exists
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ============================================
+-- 4. INSERT 3 DUMMY PRODUCTS
 -- ============================================
 INSERT INTO products (name, description, price, image_url) VALUES
 (
@@ -62,5 +145,8 @@ INSERT INTO products (name, description, price, image_url) VALUES
   'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=400&fit=crop'
 );
 
--- Verify insertion
-SELECT * FROM products ORDER BY created_at DESC;
+-- ============================================
+-- 5. VERIFY
+-- ============================================
+SELECT 'Products created: ' || COUNT(*) FROM products;
+SELECT 'Profiles table ready' AS status;
